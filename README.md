@@ -41,3 +41,10 @@ Instruction for installing Kubernetes cluster [here](https://github.com/kenphung
 ```ShellSession
 kubectl apply -f sampleapp.yaml
 ```
+
+### Using Kubernetes HPA
+
+```ShellSession
+kubectl patch pod hello-58c8ffd75-5blcm --subresource resize --patch \
+  '{"spec":{"containers":[{"name":"sampleapp", "resources":{"requests":{"cpu":"1000m"}, "limits":{"cpu":"1000m"}}}]}}'
+```

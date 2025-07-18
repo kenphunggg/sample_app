@@ -15,10 +15,18 @@ spec:
       containers:
       - name: sampleapp
         image: docker.io/lazyken/sampleapp:v1
+        resizePolicy:
+        - resourceName: cpu
+          restartPolicy: NotRequired
+        - resourceName: memory
+          restartPolicy: NotRequired
         resources:
+          limits:
+            cpu: '700m'
+            memory: '300Mi'
           requests:
-            cpu: 100m
-            memory: 100Mi
+            cpu: '100m'
+            memory: '100Mi'
         env:
         - name: USER_NAME
           value: 'LAZYken'
