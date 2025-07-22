@@ -84,6 +84,9 @@ You can install a product ready `Kubernetes` cluste using [this guild](https://g
 |`Servie`|`nodePort`|Exposes the Service on each Node's IP at a static port.|External users/traffic from outside the cluster|30000-32767|
 |`Deployment`|`containerPort`|port that the application inside your container is listening on.|Debugging inside container, if do not have a service created|All port accepted|
 
+> [!IMPORTANT]
+> `targetPort` and `containerPort` should be configured into same port
+
 Then, you can apply `.yaml` file
 
 ```shell
