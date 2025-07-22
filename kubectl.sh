@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Check for the primary command 'hpa'
-if [[ "$1" == "hpa" ]]; then
-    echo "Adjusting HPA configuration..."
+if [[ "$1" == "vpa" ]]; then
+    echo "Adjusting VPA configuration..."
 
     # Check to ensure all required arguments ($2, $3, $4) are provided
     if [[ -z "$2" || -z "$3" || -z "$4" ]]; then
         echo "Error: Missing arguments."
-        echo "Usage: $0 hpa <pod-name> <cpu-request> <cpu-limit>"
+        echo "Usage: $0 vpa <pod-name> <cpu-request> <cpu-limit>"
         exit 1
     fi
 

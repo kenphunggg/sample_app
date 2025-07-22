@@ -35,7 +35,7 @@ spec:
             fieldRef:
               fieldPath: spec.nodeName
         ports:
-        - containerPort: 80
+        - containerPort: 5000 # Port app is running
 ---
 apiVersion: v1 
 kind: Service 
@@ -46,6 +46,6 @@ spec:
   selector: 
     app: hello 
   ports: 
-    - targetPort: 5000    # Port on pod
-      port: 80            # Port for service
-      nodePort: 32593     # Port for node
+    - targetPort: 5000    # Port on pod (The port the application container is actually listening on inside the Pod.)
+      port: 80            # Port for service (For internal access)
+      nodePort: 32593     # Port for node (For external access)
