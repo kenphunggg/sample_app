@@ -93,6 +93,12 @@ Then, you can apply `.yaml` file
 kubectl apply -f deploy/kubernetes.yaml
 ```
 
+Testing the app
+```shell
+curl hello.default        # <service_name>.<namespace>:<port>
+curl 192.168.17.161:32593 # <any_node_ip_in_your_cluster>:<nodePort>
+```
+
 Using `Kubernetes` vertical pod autoscaler
 
 ```shell
