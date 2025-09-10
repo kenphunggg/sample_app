@@ -79,12 +79,12 @@ curl localhost:5000/processing_time/15
 docker build -t docker.io/lazyken/measure-app:v1 .
 
 # Run the image
-docker run -d \ 
-  -p 5000:5000 \  
-  -e DB_HOST="<your database ip>" \
-  -e DB_USER="<your username to db>" \   
-  -e DB_PASSWORD="<your password to db>" \   
-  docker.io/lazyken/measure-app:v1
+docker run -d \
+-p 5000:5000 \
+-e DB_HOST="192.168.17.162" \
+-e DB_USER="thai" \
+-e DB_PASSWORD="PQThai29112003" \
+docker.io/lazyken/measure-app:v1
 ```
 
 Now you can test the image

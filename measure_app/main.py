@@ -3,6 +3,7 @@ import os
 import time
 import threading
 import mysql.connector
+import signal
 
 from dotenv import load_dotenv
 
@@ -117,7 +118,9 @@ def background_query_task(duration):
     db_password = os.getenv("DB_PASSWORD")
     db_name = "student_db"
 
-    print(f"\n--- Starting background query task for {duration} seconds ---")
+    print(
+        f"\n--- Starting background query task for {duration} seconds ---", flush=True
+    )
     end_time = time.time() + duration
     query_count = 0
 
@@ -133,7 +136,7 @@ def background_query_task(duration):
             _ = cursor.fetchall()  # Fetch results but don't use them
             query_count += 1
         except mysql.connector.Error as err:
-            print(f"Query failed during background task: {err}")
+            print(f"Query failed during background task: {err}", flush=True)
             time.sleep(1)  # Wait a bit before retrying if there's an error
         finally:
             if cursor:
@@ -141,7 +144,9 @@ def background_query_task(duration):
             if connection and connection.is_connected():
                 connection.close()
 
-    print(f"--- Finished background task. Executed {query_count} queries. ---")
+    print(
+        f"--- Finished background task. Executed {query_count} queries. ---", flush=True
+    )
 
 
 @app.route("/list-students", methods=["GET"])
@@ -204,6 +209,21 @@ def check_student(student_id):
         return jsonify(response_data), 200
     else:
         return jsonify(response_data), 404
+
+
+def delayed_shutdown():
+    """Waits a moment then shuts down the server."""
+    time.sleep(1)  # Wait 1 second before shutting down
+    os.kill(os.getpid(), signal.SIGINT)
+
+
+@app.route("/shutdown")
+def shutdown():
+    print("--- Server shutdown initiated ---")
+    # Start a new thread for the delayed shutdown
+    shutdown_thread = threading.Thread(target=delayed_shutdown)
+    shutdown_thread.start()
+    return "Server is shutting down"
 
 
 if __name__ == "__main__":
