@@ -122,7 +122,7 @@ kubectl apply -f deploy/knative.yaml
 Now you can test the image
 
 ```bash
-# 1. Continuosly query database in a duration time (20s in this example)
+# 1. Continuosly query database in a duration time (5s in this example)
 curl http://hello.default.192.168.17.1.sslip.io/list-students?duration=5
 
 # 2. Query 15th student
