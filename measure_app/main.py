@@ -4,6 +4,7 @@ import time
 import threading
 import mysql.connector
 import signal
+import sys
 
 from dotenv import load_dotenv
 
@@ -209,21 +210,6 @@ def check_student(student_id):
         return jsonify(response_data), 200
     else:
         return jsonify(response_data), 404
-
-
-def delayed_shutdown():
-    """Waits a moment then shuts down the server."""
-    time.sleep(1)  # Wait 1 second before shutting down
-    os.kill(os.getpid(), signal.SIGINT)
-
-
-@app.route("/shutdown")
-def shutdown():
-    print("--- Server shutdown initiated ---")
-    # Start a new thread for the delayed shutdown
-    shutdown_thread = threading.Thread(target=delayed_shutdown)
-    shutdown_thread.start()
-    return "Server is shutting down"
 
 
 if __name__ == "__main__":
