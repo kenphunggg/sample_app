@@ -4,3 +4,5 @@ measure_app/.env
 
 measure_streaming/.env
 measure_streaming/output.mp4
+
+measure_streaming/data
