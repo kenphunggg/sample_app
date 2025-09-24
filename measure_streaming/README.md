@@ -78,7 +78,7 @@ Simple app that can broadcast video for streaming and receive streaming video
 2. Receive and downscale
 
     ```bash
-    docker run -p 6000:1935 docker.io/lazyken/measure-streaming:v2
+    docker run -p 6000:1935 -e SOURCE_IP="192.168.17.162:2000" docker.io/lazyken/measure-streaming:v2
     ```
 
 3. Receive video
