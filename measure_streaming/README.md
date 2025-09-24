@@ -49,6 +49,8 @@ Simple app that can broadcast video for streaming and receive streaming video
     ```bash
     # Replace *192.168.17.161* to source ip address
     # And *192.168.17.162* to your forwarding device's ip address 
+
+    # 1. Using rtmp
     ffmpeg \
     -i "rtmp://192.168.17.161/live/source" \
     -vf "scale=1920:1080" \
@@ -58,13 +60,34 @@ Simple app that can broadcast video for streaming and receive streaming video
     -an \
     -f flv \
     "rtmp://0.0.0.0:1935/live/1080p"
+
+    # 2. Using hls
+    ffmpeg \
+    -i "rtmp://192.168.17.161/live/source" \
+    -vf "scale=1920:1080" \
+    -c:v libx264 \
+    -preset veryfast \
+    -g 48 \
+    -sc_threshold 0 \
+    -f hls \
+    -hls_time 4 \
+    -hls_list_size 5 \
+    -hls_flags delete_segments \
+    -hls_segment_filename "/var/www/hls/segment%03d.ts" \
+    "/var/www/hls/playlist.m3u8"
     ```
 
 4. Receive video
     
     Replace *192.168.17.161* with your stream flow
     ```bash
+    # 1. Using rtmp
     ffmpeg -i "rtmp://192.168.17.162/live/1080p" -f null -
+
+    # 2. Using hls
+    ffmpeg -i "http://192.168.17.162/live/playlist.m3u8" -f null -
+    # Get time to first frame
+    time ffmpeg -i "http://192.168.17.162/live/playlist.m3u8" -vframes 1 -f null -
     ```
 
 ### Running using Docker
@@ -78,13 +101,19 @@ Simple app that can broadcast video for streaming and receive streaming video
 2. Receive and downscale
 
     ```bash
-    docker run -p 6000:1935 -e SOURCE_IP="192.168.17.162:2000" docker.io/lazyken/measure-streaming:v2
+    docker run -p 8080:8080 -e SOURCE_IP="192.168.17.162:2000" docker.io/lazyken/measure-streaming:v2
     ```
 
 3. Receive video
 
     ```bash
-    ffmpeg -i "rtmp://192.168.17.161:6000/live/1080p" -f null -
+    # 1. Using rtmp
+    ffmpeg -i "rtmp://192.168.17.162/live/1080p" -f null -
+
+    # 2. Using hls
+    ffmpeg -i "http://192.168.17.162/live/playlist.m3u8" -f null -
+    # Get time to first frame
+    time ffmpeg -i "http://192.168.17.162/live/playlist.m3u8" -vframes 1 -f null -
     ```
 
 ## How to contribute

@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # # Copy nginx config
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY measure/nginx.conf /etc/nginx/nginx.conf
 
 # # Log ra stdout/stderr
 RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
@@ -35,14 +35,14 @@ WORKDIR /app
 
 # Copy the bash script into the container's working directory
 # Note: The user's log refers to measure.sh, so we use that here.
-COPY measure.sh .
+COPY measure/measure.sh .
 
 # Make the script executable
 RUN chmod +x measure.sh
 
 # Expose the RTMP port that the output stream will be published to.
 # This allows other services to connect to this container on port 1935.
-EXPOSE 1935
+EXPOSE 8080
 
 # --- FIX: Explicitly run the script with /bin/sh ---
 # The base Alpine image does not include bash. By specifying /bin/sh as the
