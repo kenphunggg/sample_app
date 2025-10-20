@@ -20,7 +20,6 @@ except Exception as e:
 # --- API Endpoints ---
 
 
-# The <source> has been removed from the URL
 @app.route("/stream/time/<int:duration>", methods=["GET"])
 def handle_streaming_timed(duration):
     """
@@ -30,7 +29,7 @@ def handle_streaming_timed(duration):
         return jsonify({"success": False, "error": "Model is not loaded"}), 500
 
     # Read the stream source from an environment variable
-    rtmp_source = os.environ.get("RTMP_STREAM_URL", "192.168.17.162:2000")
+    rtmp_source = os.environ.get("RTMP_STREAM_URL", "192.168.17.130:2000")
     if not rtmp_source:
         return (
             jsonify(
@@ -50,7 +49,6 @@ def handle_streaming_timed(duration):
     return jsonify({"success": True, "message": "Timed detection complete."}), 200
 
 
-# The <source> has been removed from the URL
 @app.route("/stream", methods=["GET"])
 def handle_first_frame_streaming():
     """
@@ -60,7 +58,7 @@ def handle_first_frame_streaming():
         return jsonify({"success": False, "error": "Model is not loaded"}), 500
 
     # Read the stream source from an environment variable
-    rtmp_source = os.environ.get("RTMP_STREAM_URL", "192.168.17.162:2000")
+    rtmp_source = os.environ.get("RTMP_STREAM_URL", "192.168.17.130:2000")
     if not rtmp_source:
         return (
             jsonify(

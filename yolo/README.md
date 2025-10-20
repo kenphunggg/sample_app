@@ -5,99 +5,50 @@ Simple yolo_app that can proccess video for analystic purpose
 
 - [Testbed design](#testbed-design)
 - [How to use](#how-to-use)
-    - [Running using terminal](#running-using-terminal)
-        - [Broadcast video](#broadcast-video)
-        - [Receive video](#receive-video)
-    - [Running using Docker](#running-using-docker)
+    - [Running on local](#1-running-on-local)
+    - [Running using Docker](#2-running-using-docker)
+    - [Running using Kubnernetes](#3-running-using-kubernetes)
+    - [Running using Knative](#4-running-using-knative)
 - [How to contribute](#how-to-contribute)
 
 
 ## Testbed design
-![streaming_testbed_des.png](./img/streaming_testbed_des.png)
+![yolo_testbed_des.png](./img/yolo-testbed.png)
+In this testbed, `video` is a docker image that broadcast its video. When `Actor` request for `yolo service`, `Func-pod` will request for video from `video` and using `yolo` to analysis it.
 
 ## How to use
-### Running using terminal
 
-1. Convert origin video to 4K resolution
+In all usecases, you need to have a `video` at master-node
 
-    ```bash
-    ffmpeg -i input.mp4 -vf scale=3840x2160:flags=lanczos -c:v libx264 -preset slow -crf 19 output.mp4
+```bash
+docker run -p 5000:5000 -p 2000:1935 docker.io/lazyken/broadcast-streaming:v1
+```
 
-    ```
+### 1. Running on local
 
-    It may take a while until `ffmpeg` to convert video to 4K
+First, you need to install all dependencies
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 main.py
+```
 
-2. Broadcast video at source
+Then you can use yolo to detect streaming now.
+```bash
+# curl yolo service to analyze one frame
+curl localhost:8080/stream
 
-    ```bash
-    # Replace *192.168.17.161* to your ip address 
-    ffmpeg \
-    -re \
-    -stream_loop -1 \
-    -r 24 \
-    -i output.mp4 \
-    -f flv \
-    -c:a aac \
-    -preset ultrafast \
-    -c:v libx264 \
-    rtmp://0.0.0.0:1935/live/source
-    ```
+# curl yolo service to analyze video in <time_to_detect>
+curl localhost:8080/stream/time/50
+```
 
-3. Receive the stream, and detect it
+### 2. Running using Docker
 
-    ```bash
-    python3 main.py
-    ```
+### 3. Running using Kubernetes
 
-4. Receive result
-    
-    Replace `192.168.17.161:5000` with your stream flow - where you host yolo app and replace `192.168.17.162:2000` with your stream source
-
-    ```bash
-    curl 192.168.17.161:5000/stream/192.168.17.162:2000/time/20
-    ```
-
-### Running using Docker
-
-1. Broadcast video at source
-
-    ```bash
-    docker run -p 5000:5000 -p 2000:1935 docker.io/lazyken/broadcast-streaming:v1
-    ```
-
-2. Receive and detect
-
-    ```bash
-    docker run -p 8080:8080 -e SOURCE_IP="192.168.17.162:2000" docker.io/lazyken/measure-streaming:v2
-    ```
-
-3. Receive video
-
-    ```bash
-    # 1. Using rtmp
-    ffmpeg -i "rtmp://192.168.17.162/live/1080p" -f null -
-
-    # 2. Using hls
-    ffmpeg -i "http://192.168.17.162/live/playlist.m3u8" -f null -
-    # Get time to first frame
-    time ffmpeg -i "http://192.168.17.162/live/playlist.m3u8" -vframes 1 -f null -
-    ```
+### 4. Running using Knative
 
 ## How to contribute
 
-1. For app that broadcast video at source
-
-    Source code are located at [broadcast.py](/measure_streaming/broadcast.py) and Dockerfile to build code are located at [broadcast.Dockerfile](/measure_streaming/broadcast.Dockerfile).
-
-    After change code, you can build the image.
-
-    ```bash
-    docker build -t docker.io/lazyken/broadcast-streaming:v1 -f broadcast.Dockerfile .
-    ```
-
-2. For app that receive and downscale
-
-    ```bash
-    docker build -t docker.io/lazyken/measure-streaming:v2 -f broadcast.Dockerfile .
-    ```
 
