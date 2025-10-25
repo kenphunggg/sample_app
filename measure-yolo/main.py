@@ -1,9 +1,9 @@
 import os
-import threading
 import time
-from torch import hub
+
 from cv2 import VideoCapture
 from flask import Flask, jsonify
+from torch import hub
 
 app = Flask(__name__)
 
@@ -159,4 +159,4 @@ def detect_one_frame(rtmp_streaming_url: str):
 if __name__ == "__main__":
     # The application is now started via run.sh with gunicorn
     # This block can be left for direct `python main.py` testing if needed
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8090)))

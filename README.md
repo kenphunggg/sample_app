@@ -8,4 +8,7 @@ A simple hello app for testing on Kubernetes/Knatve. [See more](./hello_app/READ
 A simple app that query database for measuring on Kubernetes/Knative. [See more](./measure_app/README.md)
 
 ## measure_streaming
-A simple streaming service for measuring on Kubernmetes/Knative. [See more](./measure_streaming/README.md)
+A simple streaming service for measuring on Kubernetes/Knative. [See more](./measure_streaming/README.md)
+
+## measure_yolo
+A simple yolo service that detect streaming service and return object inside for measuring on Kubernetes/Knative. [See more](./measure-yolo/README.md)
