@@ -31,7 +31,7 @@ Simple app that can broadcast video for streaming and receive streaming video
 2. Broadcast video at source
 
     ```bash
-    # Replace *192.168.17.161* to your ip address 
+    # Replace *192.168.17.161* to your ip address
     ffmpeg \
     -re \
     -stream_loop -1 \
@@ -48,7 +48,7 @@ Simple app that can broadcast video for streaming and receive streaming video
 
     ```bash
     # Replace *192.168.17.161* to source ip address
-    # And *192.168.17.162* to your forwarding device's ip address 
+    # And *192.168.17.162* to your forwarding device's ip address
 
     # 1. Using rtmp
     ffmpeg \
@@ -78,7 +78,7 @@ Simple app that can broadcast video for streaming and receive streaming video
     ```
 
 4. Receive video
-    
+
     Replace *192.168.17.161* with your stream flow
     ```bash
     # 1. Using rtmp
@@ -101,7 +101,11 @@ Simple app that can broadcast video for streaming and receive streaming video
 2. Receive and downscale
 
     ```bash
+    # Running without API to control stream status
     docker run -p 8080:8080 -e SOURCE_IP="192.168.17.162:2000" docker.io/lazyken/measure-streaming:v2
+
+    # Running with API to control stream status
+    docker run -d -p 5000:5000 -p 8080:8080 -e SOURCE_IP="192.168.17.162:2000" docker.io/lazyken/measure-streaming-k8s:v1
     ```
 
 3. Receive video
