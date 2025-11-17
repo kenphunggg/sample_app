@@ -1,0 +1,44 @@
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: measure-yolo
+spec:
+  selector:
+    matchLabels:
+      app: measure-yolo
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: measure-yolo
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: "cloud-node"
+      containers:
+      - name: measure-yolo
+        image: docker.io/lazyken/measure-yolo:v1
+        # resources:
+        #   limits:
+        #     cpu: '700m'
+        #     memory: '300Mi'
+        #   requests:
+        #     cpu: '100m'
+        #     memory: '100Mi'
+        # env:
+        # - name: RTMP_STREAM_URL
+        #   value: '192.168.17.130:2000'
+        ports:
+        - containerPort: 8080 # Port app is running
+---
+apiVersion: v1 
+kind: Service 
+metadata:
+  name: measure-yolo
+spec: 
+  type: NodePort 
+  selector: 
+    app: measure-yolo 
+  ports: 
+    - targetPort: 8080    # Port on pod (The port the application container is actually listening on inside the Pod.)
+      port: 80            # Port for service (For internal access)
+      nodePort: 32593     # Port for node (For external access)
