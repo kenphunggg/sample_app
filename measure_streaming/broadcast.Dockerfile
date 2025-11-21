@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Copy nginx config
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY broadcast/nginx.conf /etc/nginx/nginx.conf
 
 # Log ra stdout/stderr
 RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
@@ -17,7 +17,7 @@ RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
 
 WORKDIR /app
 
-COPY output.mp4  broadcast.py ./
+COPY broadcast/input.mp4  broadcast/broadcast.py ./
 
 RUN pip3 install Flask gunicorn 
 

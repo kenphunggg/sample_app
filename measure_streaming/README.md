@@ -95,27 +95,55 @@ Simple app that can broadcast video for streaming and receive streaming video
 1. Broadcast video at source
 
     ```bash
-    docker run -p 5000:5000 -p 2000:1935 docker.io/lazyken/broadcast-streaming:v1
+    docker run -d -p 5000:5000 -p 2000:1935 docker.io/lazyken/broadcast-streaming:v1
+
+    # Start streaming at a preset resolution
+    curl localhost:5000/stream/start?resolution=720p
+
+    # Stop streaming
+    curl localhost:5000/stream/stop
+
+    # Get stream status
+    curl localhost:5000/stream/status
+
+    # Manually check if stream is running
+    ffprobe "rtmp://localhost:2000/live/source"
     ```
+
+    | Prefix | Resolution | Notes |
+    | --- | --- | --- |
+    | 240p | 426:240 | |
+    | 360p | 640:360 | |
+    | 480p | 854:480 | |
+    | 720p | 1280:720 | HD |
+    | 1080p | 1920:1080 | Full HD |
+    | 1440p | 2560:1440 | 2K / QHD |
+    | 2160p | 3840:2160 | 4K / UHD |
 
 2. Receive and downscale
 
     ```bash
     # Running without API to control stream status
-    docker run -p 8080:8080 -e SOURCE_IP="192.168.17.162:2000" docker.io/lazyken/measure-streaming:v2
+    docker run -d -p 8080:8080 -e SOURCE_IP="192.168.17.162:2000" -e SCALE_VALUE="1280x720" docker.io/lazyken/measure-streaming:v1
 
     # Running with API to control stream status
-    docker run -d -p 5000:5000 -p 8080:8080 -e SOURCE_IP="192.168.17.162:2000" docker.io/lazyken/measure-streaming-k8s:v1
+    docker run -d -p 5000:5000 -p 8080:8080 -e SOURCE_IP="192.168.17.162:2000" -e SCALE_VALUE="1280x720" docker.io/lazyken/measure-streaming:v2
+
+    # Start receive video, downscale and forward (for v2 only)
+    curl localhost:5000/stream/start
+
+    # Stop streaming
+    curl localhost:5000/stream/stop
+
+    # Get stream status
+    curl localhost:5000/stream/status
     ```
 
 3. Receive video
 
     ```bash
-    # 1. Using rtmp
-    ffmpeg -i "rtmp://192.168.17.162/live/1080p" -f null -
+    ffmpeg -i "http://localhost:8080/live/playlist.m3u8" -f null -
 
-    # 2. Using hls
-    ffmpeg -i "http://192.168.17.162/live/playlist.m3u8" -f null -
     # Get time to first frame
     time ffmpeg -i "http://192.168.17.162/live/playlist.m3u8" -vframes 1 -f null -
     ```

@@ -1,4 +1,4 @@
-import glob  # <--- IMPORT THIS
+import glob
 import os
 import subprocess
 
@@ -9,8 +9,20 @@ app = Flask(__name__)
 # --- Global state ---
 STREAM_PROCESS = None
 SCRIPT_PATH = "measure.sh"
-# Define the HLS directory your measure.sh script uses
 HLS_DIR = "/var/www/hls"
+
+
+# --- NEW: Resolution Preset Mapping ---
+# Maps "720p" to "1280:720" for ffmpeg's scale filter
+RESOLUTION_PRESETS = {
+    "240p": "426:240",
+    "360p": "640:360",
+    "480p": "854:480",
+    "720p": "1280:720",
+    "1080p": "1920:1080",
+    "1440p": "2560:1440",
+    "2160p": "3840:2160"  # 4K
+}
 
 
 def setup_script():
@@ -37,23 +49,38 @@ def setup_script():
 def start_stream():
     """
     Starts the transcoding script as a subprocess.
+    Accepts 'source_ip' and 'resolution' query parameters.
     """
     global STREAM_PROCESS
 
     if STREAM_PROCESS and STREAM_PROCESS.poll() is None:
         return jsonify({"error": "Stream is already running"}), 400
 
-    # --- UPDATED IP LOGIC ---
+    # --- 1. Get Source IP ---
     url_ip = request.args.get("source_ip")
     env_ip = os.environ.get("SOURCE_IP")
     default_ip = "192.168.17.161"
     source_ip = url_ip or env_ip or default_ip
-    # --- END UPDATED LOGIC ---
 
+    # --- 2. Get Resolution ---
+    resolution_param = request.args.get("resolution")
+    env_scale = os.environ.get("SCALE_VALUE", "1920:1080")
+
+    if resolution_param:
+        if resolution_param in RESOLUTION_PRESETS:
+            scale_value = RESOLUTION_PRESETS[resolution_param]
+        else:
+            scale_value = resolution_param
+    else:
+        scale_value = env_scale
+    # If resolution_param is None, scale_value remains default_scale
+
+    # --- 3. Set up environment for the script ---
     env = os.environ.copy()
     env["SOURCE_IP"] = source_ip
+    env["SCALE_VALUE"] = scale_value  # <-- NEW ENV VAR
 
-    print(f"Starting stream from source: {source_ip}")
+    print(f"Starting stream from {source_ip} with resolution {scale_value}")
     STREAM_PROCESS = subprocess.Popen(["/bin/bash", SCRIPT_PATH], env=env)
 
     return jsonify(
@@ -61,6 +88,7 @@ def start_stream():
             "message": "Stream started successfully",
             "pid": STREAM_PROCESS.pid,
             "source_ip": source_ip,
+            "resolution": scale_value,
         }
     ), 200
 
