@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: measure-streaming-container
-        image: docker.io/lazyken/measure-streaming:v2@sha256:36a4892e8c742f35f3e0f8df0eed53b751899172c638468b269fbd022008ca48
+        image: docker.io/lazyken/measure-streaming:v2@sha256:735536871c64e7d08c0e63b1de3b490f7f97079767ea19dac0a6896b988deb4c
         env:
         - name: SOURCE_IP
           value: "192.168.17.130:2000" # Your desired default IP
@@ -26,8 +26,8 @@ spec:
         ports:
         - name: api
           containerPort: 5000
-        - name: hls
-          containerPort: 8080
+        - name: rtmp
+          containerPort: 1935
         readinessProbe:
           httpGet:
             path: /stream/status
@@ -55,7 +55,7 @@ spec:
     protocol: TCP
     port: 5000       # Port the Service exposes internally in the cluster
     targetPort: api  # Port on the Pod (references port 'name' from Deployment)
-  - name: hls
+  - name: rtmp
     protocol: TCP
-    port: 8080       # Port the Service exposes internally in the cluster
-    targetPort: hls  # Port on the Pod
+    port: 1935       # Port the Service exposes internally in the cluster
+    targetPort: rtmp # Port on the Pod

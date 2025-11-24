@@ -5,82 +5,92 @@ import numpy as np
 from PIL import Image
 from flask import Flask, jsonify, request
 from torch import hub
+import sys
+import threading
 
 app = Flask(__name__)
 
-# --- Model Loading ---
-# Model is set to None initially and will be loaded via API.
+# --- Color Codes for Terminal Output ---
+class Colors:
+    HEADER = '\033[95m'  # Purple
+    BLUE = '\033[94m'    # Blue
+    CYAN = '\033[96m'    # Cyan
+    GREEN = '\033[92m'   # Green
+    WARNING = '\033[93m' # Yellow
+    FAIL = '\033[91m'    # Red
+    ENDC = '\033[0m'     # Reset color
+    BOLD = '\033[1m'     # Bold
+
+# --- Global Model State ---
 model = None
-print("Model is initially unloaded. Use POST /model/load to load it.")
+MODEL_STATUS = "LOADING" # Options: "LOADING", "READY", "FAILED"
+MODEL_ERROR = None       # To store the exception message if loading fails
+MODEL_LOAD_TIME = 0.0    # Stores how long (in seconds) the model took to load
 
-MODEL_PATH = "yolov5n.pt"
-
-# --- API Endpoints ---
-@app.route("/model/load", methods=["GET"])
-def load_model():
+def load_model_background():
     """
-    API endpoint to load the YOLOv5 model into memory.
-    This version loads from a LOCAL model file.
+    Function running in a separate thread to load the model
+    without blocking the Flask server from starting.
     """
-    global model
-    if model is not None:
-        return jsonify({"success": True, "message": "Model is already loaded."}), 200
-
-    # Check if the model file exists before trying to load it
-    if not os.path.exists(MODEL_PATH):
-        print(f"FATAL: Model file not found at {MODEL_PATH}")
-        return jsonify({"success": False, "error": f"Model file not found at {MODEL_PATH}"}), 500
+    global model, MODEL_STATUS, MODEL_ERROR, MODEL_LOAD_TIME
+    
+    print(f"{Colors.BLUE}Loading 'yolov5n' from LOCAL files...{Colors.ENDC}")
+    
+    # Start timer for model loading
+    load_start_time = time.monotonic()
 
     try:
-        # --- This version loads from a local file ---
-        print(f"Loading local model from {MODEL_PATH}...")
-
-        # 'ultralytics/yolov5': Still needed, as it's the repo that defines the model *code*.
-        # 'custom': Tells hub.load you are providing your own weights file.
-        # path=MODEL_PATH: Points to your local .pt file.
-        # source='local': CRITICAL! This tells hub.load to NOT check the internet.
-        model = hub.load("ultralytics/yolov5", "custom", path=MODEL_PATH, source="local")
-        # --- End of logic ---
-
-        print("Model loaded successfully.")
-        return jsonify({"success": True, "message": "Model loaded successfully."}), 200
+        print(f"{Colors.BLUE}Downloading/Loading 'yolov5n' from Ultralytics GitHub...{Colors.ENDC}")
+        
+        # Load the model
+        # trust_repo=True allows it to run without prompt (required for automation)
+        loaded_model = hub.load(
+            '/app/ultralytics/yolov5',  # Path to the cloned repo (contains hubconf.py)
+            'custom',                   # Use 'custom' to load specific weights file
+            path='/app/yolov5n.pt',     # Path to your local .pt file
+            source='local'              # Tells torch to look locally, not GitHub
+        )
+        
+        # Calculate load duration
+        MODEL_LOAD_TIME = round(time.monotonic() - load_start_time)
+        
+        # Assign to global variable
+        model = loaded_model
+        MODEL_STATUS = "READY"
+        print(f"{Colors.GREEN}{Colors.BOLD}Model loaded successfully in {MODEL_LOAD_TIME}s. Status: READY{Colors.ENDC}")
 
     except Exception as e:
-        print(f"FATAL: Could not load model. Error: {e}")
-        model = None
-        # This will fail in Knative with a connection error
-        return jsonify({"success": False, "error": f"Failed to load model: {str(e)}"}), 500
+        MODEL_STATUS = "FAILED"
+        MODEL_ERROR = str(e)
+        print(f"{Colors.FAIL}{Colors.BOLD}FATAL: Could not load model. Error: {e}{Colors.ENDC}")
+
+# Start the loading process in a background thread immediately
+loader_thread = threading.Thread(target=load_model_background, daemon=True)
+loader_thread.start()
 
 
-@app.route("/model/unload", methods=["GET"])
-def unload_model():
-    """
-    API endpoint to unload the YOLOv5 model from memory.
-    """
-    global model
-    if model is None:
-        return jsonify({"success": True, "message": "Model is already unloaded."}), 200
-
-    print("Unloading model...")
-    model = None
-    # Note: This just removes the reference. Python's garbage collector
-    # will free the memory if there are no other references.
-    # For more complex GPU memory, torch.cuda.empty_cache() might be needed
-    # but for this simple case, setting to None is sufficient.
-    print("Model unloaded.")
-    return jsonify({"success": True, "message": "Model unloaded."}), 200
-
+# --- API Endpoints ---
 
 @app.route("/detect/time/<int:duration>", methods=["POST"])
 def handle_image_upload_timed(duration):
-    """
-    API endpoint that accepts an image upload, continuously processes
-    that single image for a specific duration, and then returns "done".
-    """
-    if not model:
-        return jsonify({"success": False, "error": "Model is not loaded. Use POST /model/load."}), 503
+    # --- INLINE WAIT LOOP ---
+    # Get timeout from ENV, default to 60 seconds
+    wait_timeout = int(os.environ.get("MODEL_LOAD_TIMEOUT", 60))
+    start_wait = time.time()
+    
+    while MODEL_STATUS == "LOADING":
+        if time.time() - start_wait > wait_timeout:
+            return jsonify({
+                "success": False, 
+                "error": f"Timeout ({wait_timeout}s) waiting for model to load."
+            }), 503
+        time.sleep(0.1) # Check every 100ms
 
-    # Check if an image file is part of the request
+    # If loading failed, return the specific error
+    if MODEL_STATUS == "FAILED":
+        return jsonify({"success": False, "error": f"Model load failed: {MODEL_ERROR}"}), 500
+
+    # --- Proceed with Request ---
     if 'image' not in request.files:
         return jsonify({"success": False, "error": "No 'image' file part in the request"}), 400
 
@@ -89,11 +99,9 @@ def handle_image_upload_timed(duration):
         return jsonify({"success": False, "error": "No selected file"}), 400
 
     try:
-        # Read image using PIL, convert to NumPy array
         img_pil = Image.open(file.stream)
         frame = np.array(img_pil)
 
-        # Ensure image is in BGR format for OpenCV compatibility if it's color
         if len(frame.shape) == 3 and frame.shape[2] == 3:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         elif len(frame.shape) == 3 and frame.shape[2] == 4:
@@ -101,126 +109,99 @@ def handle_image_upload_timed(duration):
 
         # --- Timed Processing Loop ---
         start_time = time.monotonic()
-        print(f"--- Starting timed processing for {duration}s ---")
+        print(f"{Colors.CYAN}--- Starting timed processing for {duration}s ---{Colors.ENDC}")
+        
         while time.monotonic() - start_time <= duration:
-            # Continuously process the *same* frame
             analysis_data = detect_one_frame(frame)
             if not analysis_data.get("success"):
-                # Stop if an error occurs during processing
-                error_message = analysis_data.get(
-                    "error", "Unknown error during processing."
-                )
+                error_message = analysis_data.get("error", "Unknown error.")
+                print(f"{Colors.FAIL}Error in loop: {error_message}{Colors.ENDC}")
                 return jsonify({"success": False, "error": error_message}), 500
-            # Optional: Log to console to show work is being done
-            print(f"Processed frame, summary: {analysis_data.get('detections_summary')}")
-            # Add a small delay to prevent 100% CPU lock in the loop
+            
             time.sleep(0.01)
 
-        print("--- Timed processing finished. ---")
-        # Return "done" as requested
+        print(f"{Colors.GREEN}--- Timed processing finished. ---{Colors.ENDC}")
         return jsonify({"success": True, "message": "Timed detection complete."}), 200
 
     except Exception as e:
-        print(f"An unexpected error occurred in the API handler: {e}")
-        return (
-            jsonify(
-                {"success": False, "error": f"An unexpected server error occurred: {str(e)}"}
-            ),
-            500,
-        )
+        print(f"{Colors.FAIL}An unexpected error occurred: {e}{Colors.ENDC}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/detect", methods=["POST"])
 def handle_image_upload():
-    """
-    API endpoint that accepts an image upload, analyzes it, and returns
-    a structured JSON response with detection text and timings.
-    """
-    if not model:
-        # Return 503 Service Unavailable if model isn't ready
-        return jsonify({"success": False, "error": "Model is not loaded. Use POST /model/load."}), 503
+    # --- INLINE WAIT LOOP ---
+    # Get timeout from ENV, default to 6000 seconds
+    wait_timeout = int(os.environ.get("MODEL_LOAD_TIMEOUT", 6000))
+    start_wait = time.time()
+    
+    while MODEL_STATUS == "LOADING":
+        if time.time() - start_wait > wait_timeout and wait_timeout != 0:
+            return jsonify({
+                "success": False, 
+                "error": f"Timeout ({wait_timeout}s) waiting for model to load."
+            }), 503
+        time.sleep(0.1)
 
-    # Check if an image file is part of the request
+    # If loading failed, return the specific error
+    if MODEL_STATUS == "FAILED":
+        return jsonify({"success": False, "error": f"Model load failed: {MODEL_ERROR}"}), 500
+
+    # --- Proceed with Request ---
     if 'image' not in request.files:
-        return jsonify({"success": False, "error": "No 'image' file part in the request"}), 400
+        return jsonify({"success": False, "error": "No 'image' file part"}), 400
 
     file = request.files['image']
     if file.filename == '':
         return jsonify({"success": False, "error": "No selected file"}), 400
 
     try:
-        # --- Start Timer ---
-        # Use a monotonic clock for reliable duration measurement
         start_time = time.monotonic()
 
-        # Read image using PIL, convert to NumPy array
-        # This handles decompression (e.g., from JPG)
         img_pil = Image.open(file.stream)
         frame = np.array(img_pil)
 
-        # Ensure image is in BGR format for OpenCV/YOLO compatibility
-        # PIL loads as RGB, but OpenCV (which YOLO uses) expects BGR
         if len(frame.shape) == 3 and frame.shape[2] == 3:
-            # Convert RGB (PIL) to BGR (OpenCV)
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         elif len(frame.shape) == 3 and frame.shape[2] == 4:
-            # Handle RGBA images (e.g., PNGs) by converting and dropping alpha
             frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
 
-        # Run detection
-        analysis_data = detect_one_frame(frame)  # Pass the BGR NumPy frame
+        analysis_data = detect_one_frame(frame) 
 
-        # --- End Timer ---
         end_time = time.monotonic()
-        # Calculate total processing time in milliseconds
-        total_processing_time_ms = round((end_time - start_time) * 1000, 2)
+        total_time = round((end_time - start_time) * 1000, 2)
 
         if analysis_data and analysis_data.get("success"):
-            # Return the structured JSON response
             return jsonify({
                 "success": True,
                 "text": analysis_data.get("detections_summary"),
-                "total_server_time_ms": total_processing_time_ms,
+                "total_server_time_ms": total_time,
+                "model_loading_time_ms": MODEL_LOAD_TIME*1000, 
                 "model_preprocess_ms": analysis_data.get("preprocess_ms"),
                 "model_inference_ms": analysis_data.get("inference_ms"),
                 "model_nms_ms": analysis_data.get("nms_ms"),
                 "confidences": analysis_data.get("confidences")
             }), 200
         else:
-            # Handle errors from the detection function
-            error_message = analysis_data.get(
-                "error", "Unknown error during frame detection."
-            )
             return jsonify({
                 "success": False,
-                "error": error_message,
-                "total_server_time_ms": total_processing_time_ms
+                "error": analysis_data.get("error", "Unknown error"),
+                "total_server_time_ms": total_time
             }), 500
 
     except Exception as e:
-        # Catch-all for server-level errors (e.g., file read error)
-        print(f"An unexpected error occurred in the API handler: {e}")
-        return (
-            jsonify(
-                {"success": False, "error": f"An unexpected server error occurred: {str(e)}"}
-            ),
-            500,
-        )
+        print(f"{Colors.FAIL}Error in handler: {e}{Colors.ENDC}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # --- Core Detection Logic ---
 
-
 def detect_one_frame(frame):
-    """
-    Analyzes a single frame (as a numpy array) and returns a dictionary
-    with performance stats and detection summary.
-    """
     if frame is None:
         return {"success": False, "error": "Invalid frame provided."}
 
-    if not model:
-        return {"success": False, "error": "Model is not loaded."}
+    if MODEL_STATUS != "READY" or not model:
+        return {"success": False, "error": f"Model not ready. Status: {MODEL_STATUS}"}
 
     try:
         results = model(frame)
@@ -240,11 +221,9 @@ def detect_one_frame(frame):
             "detections_summary": summary_string.strip(),
         }
     except Exception as e:
-        print(f"Error during model inference: {e}")
+        print(f"{Colors.FAIL}Error during inference: {e}{Colors.ENDC}")
         return {"success": False, "error": f"Inference failed: {str(e)}"}
 
 
 if __name__ == "__main__":
-    # This block is for direct `python main.py` testing
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
-

@@ -124,10 +124,10 @@ Simple app that can broadcast video for streaming and receive streaming video
 
     ```bash
     # Running without API to control stream status
-    docker run -d -p 8080:8080 -e SOURCE_IP="192.168.17.162:2000" -e SCALE_VALUE="1280x720" docker.io/lazyken/measure-streaming:v1
+    docker run -d -p 2000:1935 -e SOURCE_IP="192.168.17.162:2000" -e SCALE_VALUE="1280x720" docker.io/lazyken/measure-streaming:v1
 
     # Running with API to control stream status
-    docker run -d -p 5000:5000 -p 8080:8080 -e SOURCE_IP="192.168.17.162:2000" -e SCALE_VALUE="1280x720" docker.io/lazyken/measure-streaming:v2
+    docker run -d -p 5000:5000 -p 2000:1935 -e SOURCE_IP="192.168.17.162:2000" -e SCALE_VALUE="1280x720" docker.io/lazyken/measure-streaming:v2
 
     # Start receive video, downscale and forward (for v2 only)
     curl localhost:5000/stream/start

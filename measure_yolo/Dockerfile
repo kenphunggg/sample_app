@@ -40,4 +40,4 @@ EXPOSE 8080
 ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
 
 # Run with Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--graceful-timeout", "5", "--access-logfile", "-", "--error-logfile", "-", "main:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--timeout", "3000", "--graceful-timeout", "5", "--access-logfile", "-", "--error-logfile", "-", "main:app"]

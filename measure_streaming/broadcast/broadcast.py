@@ -70,6 +70,7 @@ def start_stream():
     rescale_command = [
         "ffmpeg",
         "-i", ORIGINAL_VIDEO,
+        "-r", "120",
         "-s", ffmpeg_resolution,  # <-- ***USE THE LOOKED-UP VALUE***
         "-c:a", "aac",
         "-c:v", "libx264",
@@ -101,7 +102,7 @@ def start_stream():
         "ffmpeg",
         "-re",
         "-stream_loop", "-1",
-        "-r", "24",
+        "-r", "120",
         "-i", RESCALED_VIDEO,
         "-f", "flv",
         "-c:a", "aac",
