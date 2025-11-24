@@ -98,7 +98,7 @@ Simple app that can broadcast video for streaming and receive streaming video
     docker run -d -p 5000:5000 -p 2000:1935 docker.io/lazyken/broadcast-streaming:v1
 
     # Start streaming at a preset resolution
-    curl localhost:5000/stream/start?resolution=720p
+    curl "http://localhost:5000/stream/start?resolution=1080p&fps=60"
 
     # Stop streaming
     curl localhost:5000/stream/stop

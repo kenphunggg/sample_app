@@ -30,48 +30,47 @@ RESOLUTION_PRESETS = {
 @app.route("/stream/start")
 def start_stream():
     """
-    Checks for a 'resolution' query param (e.g., ?resolution=720p).
-    Looks up the preset, rescales the video, and starts the stream.
+    Checks for 'resolution' AND 'fps' query params.
+    (e.g., ?resolution=720p&fps=60)
     """
     global stream_process
 
-    # 1. Get the resolution PRESET from the URL query parameter
-    res_key = request.args.get('resolution') # e.g., "720p"
+    # 1. Get and Validate RESOLUTION
+    res_key = request.args.get('resolution')
     if not res_key:
-        return (
-            jsonify({"status": "error", "message": "Missing 'resolution' query parameter. (e.g., ?resolution=720p)"}),
-            400,
-        )
+        return jsonify({"status": "error", "message": "Missing 'resolution' query parameter."}), 400
 
-    # --- NEW: Look up the resolution ---
     ffmpeg_resolution = RESOLUTION_PRESETS.get(res_key)
-    
     if not ffmpeg_resolution:
-        # Inform the user of valid options if their key isn't found
         valid_options = ", ".join(RESOLUTION_PRESETS.keys())
-        return (
-            jsonify({
-                "status": "error", 
-                "message": f"Invalid resolution preset '{res_key}'. Valid options are: {valid_options}"
-            }), 400
-        )
-    # At this point, ffmpeg_resolution is a string like "1280x720"
+        return jsonify({
+            "status": "error", 
+            "message": f"Invalid resolution '{res_key}'. Valid options: {valid_options}"
+        }), 400
+
+    # 2. --- NEW: Get and Validate FPS ---
+    fps_val = request.args.get('fps')
+    if not fps_val:
+        return jsonify({"status": "error", "message": "Missing 'fps' query parameter. (e.g., ?resolution=720p&fps=60)"}), 400
+    
+    # Optional: Ensure FPS is actually a number
+    if not fps_val.isdigit():
+         return jsonify({"status": "error", "message": "FPS must be a number (e.g., 30, 60)."}), 400
 
 
-    # 2. Check if the process is already running
+    # 3. Check if process is already running
     if stream_process and stream_process.poll() is None:
-        return (
-            jsonify({"status": "error", "message": "Stream is already running."}),
-            400,
-        )
+        return jsonify({"status": "error", "message": "Stream is already running."}), 400
 
-    # 3. --- Rescale the video (Blocking) ---
-    print(f"Rescaling {ORIGINAL_VIDEO} to {res_key} ({ffmpeg_resolution}) -> {RESCALED_VIDEO}...")
+
+    # 4. --- Rescale the video (Blocking) ---
+    print(f"Rescaling {ORIGINAL_VIDEO} to {res_key} ({ffmpeg_resolution}) at {fps_val} FPS...")
+    
     rescale_command = [
         "ffmpeg",
         "-i", ORIGINAL_VIDEO,
-        "-r", "120",
-        "-s", ffmpeg_resolution,  # <-- ***USE THE LOOKED-UP VALUE***
+        "-r", fps_val,          # <-- UPDATED: Uses query param
+        "-s", ffmpeg_resolution,
         "-c:a", "aac",
         "-c:v", "libx264",
         "-preset", "ultrafast",
@@ -84,25 +83,17 @@ def start_stream():
         print("Rescale complete.")
 
     except subprocess.CalledProcessError as e:
-        return (
-            jsonify({
-                "status": "error", 
-                "message": f"Failed to rescale video: {e.stderr.decode()}"
-            }), 500
-        )
+        return jsonify({"status": "error", "message": f"Failed to rescale: {e.stderr.decode()}"}), 500
     except Exception as e:
-        return (
-            jsonify({"status": "error", "message": f"Failed to start rescale: {e}"}),
-            500,
-        )
+        return jsonify({"status": "error", "message": f"Failed to start rescale: {e}"}), 500
 
 
-    # 4. --- Start the stream (Non-blocking) ---
+    # 5. --- Start the stream (Non-blocking) ---
     stream_command = [
         "ffmpeg",
         "-re",
         "-stream_loop", "-1",
-        "-r", "120",
+        "-r", fps_val,          # <-- UPDATED: Uses query param
         "-i", RESCALED_VIDEO,
         "-f", "flv",
         "-c:a", "aac",
@@ -112,21 +103,16 @@ def start_stream():
     ]
 
     try:
-        print(f"Starting FFmpeg stream with {RESCALED_VIDEO}...")
+        print(f"Starting stream with {RESCALED_VIDEO} at {fps_val} FPS...")
         stream_process = subprocess.Popen(stream_command)
 
-        return jsonify(
-            {
-                "status": "success",
-                "message": f"Rescaled to {res_key} ({ffmpeg_resolution}) and stream started.",
-                "pid": stream_process.pid,
-            }
-        )
+        return jsonify({
+            "status": "success",
+            "message": f"Stream started: {res_key} ({ffmpeg_resolution}) @ {fps_val}fps.",
+            "pid": stream_process.pid,
+        })
     except Exception as e:
-        return (
-            jsonify({"status": "error", "message": f"Failed to start stream: {e}"}),
-            500,
-        )
+        return jsonify({"status": "error", "message": f"Failed to start stream: {e}"}), 500
 
 
 @app.route("/stream/stop")
