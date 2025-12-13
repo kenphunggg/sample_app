@@ -7,14 +7,14 @@ spec:
   template:
     metadata:
       annotations:
-        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/minScale: "1"
         autoscaling.knative.dev/window: "10s"
     spec:
       # Forces pods to run on the specific node
       nodeSelector:
         kubernetes.io/hostname: "cloud-node"
       containers:
-        - image: docker.io/lazyken/measure-yolo:v1@sha256:31a9a8a56a37f5bca6ca885b597933b09ad687bffa7b30cae9c0ca8e65b25028
+        - image: docker.io/lazyken/measure-yolo:v1@sha256:19c6b78bc821ce089b2e65d5718116d2010d84d11e86043eb2263557a13452c7
           ports:
             - containerPort: 8080
           env:
@@ -22,7 +22,9 @@ spec:
               value: '192.168.17.130:2000'
             - name: MODEL_LOAD_TIMEOUT
               value: '0'
-          # resources:
-          #   limits:
-          #     cpu: "100m"   
-          #     memory: "3Gi"  
+          resources:
+            requests:
+              cpu: "100m"
+            limits:
+              cpu: "2000m"   
+              memory: "3Gi"  
