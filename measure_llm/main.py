@@ -28,6 +28,10 @@ app = Flask(__name__)
 # Global variables for models
 text2text_model: Llama = None
 text2image_pipe: StableDiffusion = None
+loading_times = {
+    "llm_load_time": 0.0,
+    "sd_load_time": 0.0
+}
 
 # --- Configuration ---
 LLAMA_MODEL_PATH = "gemma-2-2b-it-Q8_0.gguf"
@@ -39,67 +43,79 @@ if not os.path.exists(IMAGE_OUTPUT_FOLDER):
     os.makedirs(IMAGE_OUTPUT_FOLDER)
 
 def initialize_models():
-    """Initializes both the LLM and the Stable Diffusion model."""
-    global text2text_model, text2image_pipe
+    """Initializes models and records the time taken to load each."""
+    global text2text_model, text2image_pipe, loading_times
 
-    # --- 1. Initialize LLM (Text to Text) ---
+    # 1. Initialize LLM
     colored_print("Initializing Text-to-Text Model...", TextColor.CYAN)
-    llm_start_time = time.time()
+    start = time.time()
     try:
         text2text_model = Llama(
             model_path=LLAMA_MODEL_PATH,
             n_gpu_layers=0,
             n_threads=8,
-            verbose=True
+            verbose=False
         )
-        llm_end_time = time.time()
-        colored_print(
-            f"Llama Model loaded in: {llm_end_time - llm_start_time:.2f} seconds",
-            TextColor.GREEN
-        )
+        loading_times["llm_load_time"] = round(time.time() - start, 2)
+        colored_print(f"Llama Model loaded in: {loading_times['llm_load_time']}s", TextColor.GREEN)
     except Exception as e:
         colored_print(f"Error loading Llama model: {e}", TextColor.RED)
 
-    # --- 2. Initialize Stable Diffusion (Text to Image) ---
+    # 2. Initialize Stable Diffusion
     colored_print("Initializing Text-to-Image Model...", TextColor.CYAN)
-    sd_start_time = time.time()
+    start = time.time()
     try:
         text2image_pipe = StableDiffusion(
             model_path=STABLE_DIFFUSION_MODEL_PATH,
             wtype="default",
         )
-        sd_end_time = time.time()
-        colored_print(
-            f"Stable Diffusion Model loaded in: {sd_end_time - sd_start_time:.2f} seconds",
-            TextColor.GREEN
-        )
+        loading_times["sd_load_time"] = round(time.time() - start, 2)
+        colored_print(f"SD Model loaded in: {loading_times['sd_load_time']}s", TextColor.GREEN)
     except Exception as e:
-        colored_print(f"Error loading Stable Diffusion model. Check path and requirements: {e}", TextColor.RED)
-        text2image_pipe = None
+        colored_print(f"Error loading SD model: {e}", TextColor.RED)
 
 # --- Text-to-Text Endpoint (Original) ---
 @app.route("/text2text", methods=["GET"])
 def query() -> Dict[str, Union[str, int]]:
-    # ... (function body remains the same) ...
-    global text2text_model
+    global text2text_model, loading_times
+
+    # 1. Log Incoming Request
+    prompt = request.args.get("prompt", "")
+    colored_print(f"--- Incoming Text2Text Request ---", TextColor.CYAN)
+    colored_print(f"Prompt: {prompt[:50]}..." if len(prompt) > 50 else f"Prompt: {prompt}", TextColor.YELLOW)
+
     if not text2text_model:
+        colored_print("Error: Text-to-Text model is not initialized.", TextColor.RED)
         return jsonify({"error": "Text-to-Text model is not initialized."}), 503
 
-    prompt = request.args.get("prompt", "")
-
     if not prompt:
+        colored_print("Error: Missing 'prompt' query parameter.", TextColor.RED)
         return jsonify({"error": "Missing 'prompt' query parameter."}), 400
 
-    # Call the LLM
-    out = text2text_model(prompt, max_tokens=200, stream=False)
+    # 2. Process and Log LLM Call
+    inference_start = time.monotonic()
+    try:
+        out = text2text_model(prompt, max_tokens=200, stream=False)
+        inference_time = round(time.monotonic() - inference_start, 2)
 
-    # Return the simple result
-    return jsonify({
-        "reply": out["choices"][0]["text"],
-    })
+        reply = out["choices"][0]["text"]
+
+        # 3. Log Success and Metrics
+        colored_print(f"Inference complete in {inference_time}s", TextColor.GREEN)
+        colored_print(f"Model Load Reference: LLM({loading_times['llm_load_time']}s) SD({loading_times['sd_load_time']}s)", TextColor.BLUE)
+
+        return jsonify({
+            "reply": reply,
+            "text2text_loading_time": loading_times["llm_load_time"],
+            "text2image_loading_time": loading_times["sd_load_time"]
+        })
+
+    except Exception as e:
+        colored_print(f"Exception during inference: {e}", TextColor.RED)
+        return jsonify({"error": "Internal model error"}), 500
 
 @app.route("/text2text/time/<int:duration>", methods=["GET"])
-def query_timed(duration) -> Dict[str, Union[str, int]]:
+def query_timed(duration):
     global text2text_model
     if not text2text_model:
         return jsonify({"error": "Text-to-Text model is not initialized."}), 503
@@ -108,44 +124,25 @@ def query_timed(duration) -> Dict[str, Union[str, int]]:
     if not prompt:
         return jsonify({"error": "Missing 'prompt' query parameter."}), 400
 
-    results = []
     start_time = time.monotonic()
+    count = 0
 
     colored_print(f"--- Starting timed Text Generation for {duration}s ---", TextColor.CYAN)
 
-    # The loop continues until the elapsed time exceeds the duration
     while time.monotonic() - start_time <= duration:
         try:
-            # Call the LLM
-            # We use a slightly lower max_tokens to ensure we can get multiple
-            # responses within the time window.
-            out = text2text_model(prompt, max_tokens=150, stream=False)
-
-            reply = out["choices"][0]["text"].strip()
-            results.append({
-                "index": len(results) + 1,
-                "text": reply,
-                "timestamp": time.strftime("%H:%M:%S")
-            })
-
-            colored_print(f"Generated response {len(results)}", TextColor.GREEN)
-
-            # Brief pause to prevent CPU pegging and allow system interrupts
+            # Generate but we don't need to store the result in a list anymore
+            text2text_model(prompt, max_tokens=150, stream=False)
+            count += 1
+            colored_print(f"Generated response {count}", TextColor.GREEN)
             time.sleep(0.01)
-
         except Exception as e:
-            colored_print(f"Error during timed text generation: {e}", TextColor.RED)
+            colored_print(f"Error: {e}", TextColor.RED)
             break
 
-    total_time = round(time.monotonic() - start_time, 2)
-    colored_print(f"--- Timed processing finished. Generated {len(results)} replies in {total_time}s ---", TextColor.CYAN)
-
+    # Only return success and model loading time
     return jsonify({
         "success": True,
-        "prompt": prompt,
-        "total_generated": len(results),
-        "actual_duration": total_time,
-        "replies": results
     }), 200
 
 

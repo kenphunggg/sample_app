@@ -29,20 +29,11 @@ This repository contains the code for deploying open-source LLM models locally a
 4. Install neccessary model
 
    ```bash
+   # Text to text model
    huggingface-cli download bartowski/gemma-2-2b-it-GGUF --include "gemma-2-2b-it-Q8_0.gguf" --local-dir ./
-   ```
 
-### Install model
-
-1. Text to image model
-
-   ```bash
+   # Text to image model
    curl -L "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf?download=true" -o stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf
-   ```
-2. Text to text model
-
-   ```bash
-   curl -O "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/blob/main/gemma-2-2b-it-Q8_0.gguf"
    ```
 
 ### Using model
@@ -58,10 +49,10 @@ This repository contains the code for deploying open-source LLM models locally a
    ```
 
 3. Test the deployment from another terminal:
-   ```bash
-   curl "http://localhost:8000/query?prompt=hello"
-   ```
-   Or with quotes:
+
+   Text to text model
    ```bash
    curl --get "http://localhost:8000/query" --data-urlencode "prompt=Write me a poem about winter"
+
+   # Continously force model to process
    ```
