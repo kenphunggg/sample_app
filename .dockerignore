@@ -1,5 +1,0 @@
-s.venv
-
-__pycache__/
-*.pyc
-.gitignore

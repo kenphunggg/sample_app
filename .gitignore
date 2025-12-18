@@ -8,3 +8,9 @@ measure_streaming/data
 
 yolo/.venv
 yolo/input.mp4
+
+measure_llm/.venv
+measure_llm/.huggingface
+measure_llm/__pycache__
+measure_llm/gemma-2-2b-it-Q8_0.gguf
+measure_llm/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf

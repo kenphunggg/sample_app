@@ -1,0 +1,266 @@
+from flask import Flask, jsonify, request
+from llama_cpp import Llama
+import time
+from typing import Dict, Any, Union
+import os
+from stable_diffusion_cpp import StableDiffusion
+
+# --- ANSI Color Codes (Helper) ---
+class TextColor:
+    """Class containing ANSI color codes."""
+    RESET = '\033[0m'
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    MAGENTA = '\033[95m'
+    CYAN = '\033[96m'
+
+def colored_print(text: str, color_code: str):
+    """Prints text in the specified color."""
+    print(f"{color_code}{text}{TextColor.RESET}")
+# ---------------------------------
+
+# --- Flask Initialization ---
+app = Flask(__name__)
+
+# --- Initialize Models ---
+# Global variables for models
+text2text_model: Llama = None
+text2image_pipe: StableDiffusion = None
+
+# --- Configuration ---
+LLAMA_MODEL_PATH = "gemma-2-2b-it-Q8_0.gguf"
+STABLE_DIFFUSION_MODEL_PATH = "stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf"
+IMAGE_OUTPUT_FOLDER = "generated_images"
+
+# Create the output folder if it doesn't exist
+if not os.path.exists(IMAGE_OUTPUT_FOLDER):
+    os.makedirs(IMAGE_OUTPUT_FOLDER)
+
+def initialize_models():
+    """Initializes both the LLM and the Stable Diffusion model."""
+    global text2text_model, text2image_pipe
+
+    # --- 1. Initialize LLM (Text to Text) ---
+    colored_print("Initializing Text-to-Text Model...", TextColor.CYAN)
+    llm_start_time = time.time()
+    try:
+        text2text_model = Llama(
+            model_path=LLAMA_MODEL_PATH,
+            n_gpu_layers=0,
+            n_threads=8,
+            verbose=True
+        )
+        llm_end_time = time.time()
+        colored_print(
+            f"Llama Model loaded in: {llm_end_time - llm_start_time:.2f} seconds",
+            TextColor.GREEN
+        )
+    except Exception as e:
+        colored_print(f"Error loading Llama model: {e}", TextColor.RED)
+
+    # --- 2. Initialize Stable Diffusion (Text to Image) ---
+    colored_print("Initializing Text-to-Image Model...", TextColor.CYAN)
+    sd_start_time = time.time()
+    try:
+        text2image_pipe = StableDiffusion(
+            model_path=STABLE_DIFFUSION_MODEL_PATH,
+            wtype="default",
+        )
+        sd_end_time = time.time()
+        colored_print(
+            f"Stable Diffusion Model loaded in: {sd_end_time - sd_start_time:.2f} seconds",
+            TextColor.GREEN
+        )
+    except Exception as e:
+        colored_print(f"Error loading Stable Diffusion model. Check path and requirements: {e}", TextColor.RED)
+        text2image_pipe = None
+
+# --- Text-to-Text Endpoint (Original) ---
+@app.route("/text2text", methods=["GET"])
+def query() -> Dict[str, Union[str, int]]:
+    # ... (function body remains the same) ...
+    global text2text_model
+    if not text2text_model:
+        return jsonify({"error": "Text-to-Text model is not initialized."}), 503
+
+    prompt = request.args.get("prompt", "")
+
+    if not prompt:
+        return jsonify({"error": "Missing 'prompt' query parameter."}), 400
+
+    # Call the LLM
+    out = text2text_model(prompt, max_tokens=200, stream=False)
+
+    # Return the simple result
+    return jsonify({
+        "reply": out["choices"][0]["text"],
+    })
+
+@app.route("/text2text/time/<int:duration>", methods=["GET"])
+def query_timed(duration) -> Dict[str, Union[str, int]]:
+    global text2text_model
+    if not text2text_model:
+        return jsonify({"error": "Text-to-Text model is not initialized."}), 503
+
+    prompt = request.args.get("prompt", "")
+    if not prompt:
+        return jsonify({"error": "Missing 'prompt' query parameter."}), 400
+
+    results = []
+    start_time = time.monotonic()
+
+    colored_print(f"--- Starting timed Text Generation for {duration}s ---", TextColor.CYAN)
+
+    # The loop continues until the elapsed time exceeds the duration
+    while time.monotonic() - start_time <= duration:
+        try:
+            # Call the LLM
+            # We use a slightly lower max_tokens to ensure we can get multiple
+            # responses within the time window.
+            out = text2text_model(prompt, max_tokens=150, stream=False)
+
+            reply = out["choices"][0]["text"].strip()
+            results.append({
+                "index": len(results) + 1,
+                "text": reply,
+                "timestamp": time.strftime("%H:%M:%S")
+            })
+
+            colored_print(f"Generated response {len(results)}", TextColor.GREEN)
+
+            # Brief pause to prevent CPU pegging and allow system interrupts
+            time.sleep(0.01)
+
+        except Exception as e:
+            colored_print(f"Error during timed text generation: {e}", TextColor.RED)
+            break
+
+    total_time = round(time.monotonic() - start_time, 2)
+    colored_print(f"--- Timed processing finished. Generated {len(results)} replies in {total_time}s ---", TextColor.CYAN)
+
+    return jsonify({
+        "success": True,
+        "prompt": prompt,
+        "total_generated": len(results),
+        "actual_duration": total_time,
+        "replies": results
+    }), 200
+
+
+# --- NEW Text-to-Image Endpoint ---
+@app.route("/text2image", methods=["GET"])
+def generate_image():
+    global text2image_pipe
+    if not text2image_pipe:
+        return jsonify({"error": "Text-to-Image model is not initialized."}), 503
+
+    prompt = request.args.get("prompt", "")
+    width = 512
+    height = 512
+    seed = int(request.args.get("seed", -1))
+
+    if not prompt:
+        return jsonify({"error": "Missing 'prompt' query parameter."}), 400
+
+    # New colored print for generation
+    colored_print(f"Generating image for prompt: '{prompt}'", TextColor.MAGENTA)
+    try:
+        # ... (image generation logic remains the same) ...
+        output = text2image_pipe.generate_image(
+            prompt=prompt,
+            sample_method="euler_a",
+            width=width,
+            height=height,
+            seed=seed
+        )
+
+        image = output[0]
+        timestamp = int(time.time())
+        filename = f"image_{timestamp}.png"
+        save_path = os.path.join(IMAGE_OUTPUT_FOLDER, filename)
+
+        image.save(save_path)
+        colored_print(f"Image saved to: {save_path}", TextColor.GREEN) # Success message color
+
+        return jsonify({
+            "status": "success",
+            "message": "Image generated successfully.",
+            "prompt": prompt,
+            "filename": filename,
+            "path": save_path
+        })
+    except Exception as e:
+        colored_print(f"An error occurred during image generation: {e}", TextColor.RED) # Error message color
+        return jsonify({
+            "status": "error",
+            "message": f"An error occurred during image generation: {e}"
+        }), 500
+
+@app.route("/text2image/time/<int:duration>", methods=["GET"])
+def generate_image_timed(duration):
+    global text2image_pipe
+    if not text2image_pipe:
+        return jsonify({"error": "Text-to-Image model is not initialized."}), 503
+
+    prompt = request.args.get("prompt", "")
+    if not prompt:
+        return jsonify({"error": "Missing 'prompt' query parameter."}), 400
+
+    width = 512
+    height = 512
+
+    start_time = time.monotonic()
+    images_generated = 0
+    generated_files = []
+
+    colored_print(f"--- Starting timed Image Generation for {duration}s ---", TextColor.CYAN)
+
+    # The loop runs until the duration is exceeded
+    while time.monotonic() - start_time <= duration:
+        try:
+            iteration_start = time.monotonic()
+            colored_print(f"Generating image {images_generated + 1}...", TextColor.MAGENTA)
+
+            # Generate the image
+            output = text2image_pipe.generate_image(
+                prompt=prompt,
+                sample_method="euler_a",
+                width=width,
+                height=height
+            )
+
+            # Save the image with a unique name
+            image = output[0]
+            timestamp = int(time.time())
+            filename = f"timed_{timestamp}_{images_generated}.png"
+            save_path = os.path.join(IMAGE_OUTPUT_FOLDER, filename)
+            image.save(save_path)
+
+            generated_files.append(filename)
+            images_generated += 1
+
+            colored_print(f"Image {images_generated} saved: {filename}", TextColor.GREEN)
+
+            # Small safety sleep to prevent CPU spiking between calls
+            time.sleep(0.1)
+
+        except Exception as e:
+            colored_print(f"Error during timed generation: {e}", TextColor.RED)
+            break
+
+    colored_print(f"--- Timed processing finished. Generated {images_generated} images. ---", TextColor.CYAN)
+
+    return jsonify({
+        "success": True,
+        "total_images": images_generated,
+        "files": generated_files,
+        "duration_requested": duration,
+        "actual_time": round(time.monotonic() - start_time, 2)
+    }), 200
+
+if __name__ == "__main__":
+    initialize_models()
+    colored_print("Flask server starting on http://0.0.0.0:8000", TextColor.YELLOW)
+    app.run(host='0.0.0.0', port=8000)
