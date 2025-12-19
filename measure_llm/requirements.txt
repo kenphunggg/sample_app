@@ -1,3 +1,4 @@
 flask
 llama-cpp-python
 stable-diffusion-cpp-python
+gunicorn

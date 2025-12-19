@@ -1,6 +1,0 @@
-
-    # Note on perf_context attributes:
-    # - total_time: total time spent in inference (ms)
-    # - prompt_eval_time: time spent processing the prompt (ms)
-    # - n_eval_tokens: number of generated tokens (runs)
-    # - n_prompt_tokens: number of prompt tokens

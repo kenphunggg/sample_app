@@ -257,7 +257,7 @@ def generate_image_timed(duration):
         "actual_time": round(time.monotonic() - start_time, 2)
     }), 200
 
+initialize_models()
 if __name__ == "__main__":
-    initialize_models()
     colored_print("Flask server starting on http://0.0.0.0:8000", TextColor.YELLOW)
     app.run(host='0.0.0.0', port=8000)
