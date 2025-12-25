@@ -52,7 +52,10 @@ This repository contains the code for deploying open-source LLM models locally a
 
    Text to text model
    ```bash
-   curl --get "http://localhost:8000/query" --data-urlencode "prompt=Write me a poem about winter"
+   curl --get "http://localhost:8000/text2text" --data-urlencode "prompt=Write me a poem about winter"
+   ```
 
-   # Continously force model to process
+   Text to image model
+   ```bash
+   curl --get "http://localhost:8000/text2image" --data-urlencode "prompt=A cat"
    ```
