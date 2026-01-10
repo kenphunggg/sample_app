@@ -1,6 +1,8 @@
+import time
+
+APP_START_TIME = time.time()
 from flask import Flask, request, jsonify
 import os
-import time
 import threading
 import mysql.connector
 import signal
@@ -210,6 +212,33 @@ def check_student(student_id):
         return jsonify(response_data), 200
     else:
         return jsonify(response_data), 404
+
+
+@app.route("/uptime", methods=["GET"])
+def get_startup_time():
+    """
+    Returns the app start time and the time when the request processing finished.
+    """
+    # 1. Simulate processing delay
+    start_perf = time.perf_counter()
+    time.sleep(1)
+
+    # 2. Capture the time right now (after the sleep)
+    processing_done_time = time.time()
+    end_perf = time.perf_counter()
+    duration = end_perf - start_perf
+
+    return (
+        jsonify(
+            {
+                "status": "online",
+                "app_start_timestamp": APP_START_TIME,
+                "processing_done_timestamp": processing_done_time,
+                "processing_time_sec": duration,
+            }
+        ),
+        200,
+    )
 
 
 if __name__ == "__main__":
