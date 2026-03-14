@@ -225,5 +225,28 @@ def detect_one_frame(frame):
         return {"success": False, "error": f"Inference failed: {str(e)}"}
 
 
+@app.route("/status", methods=["GET"])
+def get_model_status():
+    """
+    Returns the current loading status of the model.
+    Useful for readiness probes or health checks.
+    """
+    response = {
+        "status": MODEL_STATUS,
+        "load_time_seconds": MODEL_LOAD_TIME,
+        "error": MODEL_ERROR
+    }
+    
+    # Return 503 Service Unavailable if model is not ready yet
+    if MODEL_STATUS == "LOADING":
+        return jsonify(response), 503
+    
+    # Return 500 Internal Server Error if model failed to load
+    if MODEL_STATUS == "FAILED":
+        return jsonify(response), 500
+        
+    # Return 200 OK if model is ready
+    return "READY", 200
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
