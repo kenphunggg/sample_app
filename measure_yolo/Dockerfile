@@ -32,6 +32,7 @@ RUN pip install --no-cache-dir -r /app/ultralytics/yolov5/requirements.txt
 
 # Copy all app files
 COPY main.py .
+COPY analyze_image/640.jpg /app/analyze_image/640.jpg
 COPY yolov5n.pt .
 
 # Expose port

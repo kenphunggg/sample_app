@@ -194,6 +194,70 @@ def handle_image_upload():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+LOCAL_IMAGE_PATH = "/app/analyze_image/640.jpg"
+
+
+@app.route("/detect/local", methods=["GET"])
+def handle_detect_local():
+    wait_timeout = int(os.environ.get("MODEL_LOAD_TIMEOUT", 6000))
+    start_wait = time.time()
+
+    while MODEL_STATUS == "LOADING":
+        if time.time() - start_wait > wait_timeout and wait_timeout != 0:
+            return jsonify({
+                "success": False,
+                "error": f"Timeout ({wait_timeout}s) waiting for model to load."
+            }), 503
+        time.sleep(0.1)
+
+    if MODEL_STATUS == "FAILED":
+        return jsonify({"success": False, "error": f"Model load failed: {MODEL_ERROR}"}), 500
+
+    if not os.path.exists(LOCAL_IMAGE_PATH):
+        return jsonify({
+            "success": False,
+            "error": f"Bundled image missing on disk: {LOCAL_IMAGE_PATH}"
+        }), 500
+
+    try:
+        start_time = time.monotonic()
+
+        img_pil = Image.open(LOCAL_IMAGE_PATH)
+        frame = np.array(img_pil)
+
+        if len(frame.shape) == 3 and frame.shape[2] == 3:
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        elif len(frame.shape) == 3 and frame.shape[2] == 4:
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+
+        analysis_data = detect_one_frame(frame)
+
+        end_time = time.monotonic()
+        total_time = round((end_time - start_time) * 1000, 2)
+
+        if analysis_data and analysis_data.get("success"):
+            return jsonify({
+                "success": True,
+                "text": analysis_data.get("detections_summary"),
+                "total_server_time_ms": total_time,
+                "model_loading_time_ms": MODEL_LOAD_TIME * 1000,
+                "model_preprocess_ms": analysis_data.get("preprocess_ms"),
+                "model_inference_ms": analysis_data.get("inference_ms"),
+                "model_nms_ms": analysis_data.get("nms_ms"),
+                "confidences": analysis_data.get("confidences"),
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": analysis_data.get("error", "Unknown error"),
+                "total_server_time_ms": total_time
+            }), 500
+
+    except Exception as e:
+        print(f"{Colors.FAIL}Error in handler: {e}{Colors.ENDC}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # --- Core Detection Logic ---
 
 def detect_one_frame(frame):
