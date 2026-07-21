@@ -41,8 +41,17 @@ Then you can use yolo to detect streaming now.
 # curl yolo service to analyze one frame
 curl -X POST -F "image=@analyze_image/4k.jpg" http://localhost:8080/detect
 
-# It should retun like this
-{"confidences":[0.8860411047935486,0.8586447834968567,0.8408066034317017,0.8164324760437012,0.38944581151008606,0.28988006711006165],"model_inference_ms":81.81,"model_nms_ms":27.01,"model_preprocess_ms":8.87,"success":true,"text":"image 1/1: 2160x3840 6 persons\nSpeed: 8.9ms pre-process, 81.8ms inference, 27.0ms NMS per image at shape (1, 3, 384, 640)","total_server_time_ms":290.45}
+# curl the local-image endpoint used by TrafficGenerator.
+# The first POST handled by a pod returns cold_start=true; later POSTs return cold_start=false.
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-Trafficgen-Request-Id: 1" \
+  -d '{"request_id":1}' \
+  http://localhost:8080/detect/local
+
+# It returns a compact JSON response with request_id, cold_start,
+# processing_time_ms, and model_inference_ms.
+{"cold_start":true,"model_inference_ms":81.81,"request_id":1,"processing_time_ms":290.45,"success":true}
 
 # curl yolo service to analyze video in <time_to_detect>
 curl -X POST -F "image=@analyze_image/4k.jpg" http://localhost:8080/detect/time/5

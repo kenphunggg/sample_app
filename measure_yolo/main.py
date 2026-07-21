@@ -26,6 +26,8 @@ model = None
 MODEL_STATUS = "LOADING" # Options: "LOADING", "READY", "FAILED"
 MODEL_ERROR = None       # To store the exception message if loading fails
 MODEL_LOAD_TIME = 0.0    # Stores how long (in seconds) the model took to load
+TRAFFICGEN_FIRST_LOCAL_POST = True
+TRAFFICGEN_REQUEST_ID_HEADER = "X-Trafficgen-Request-Id"
 
 def load_model_background():
     """
@@ -195,6 +197,102 @@ def handle_image_upload():
 
 
 LOCAL_IMAGE_PATH = "/app/analyze_image/640.jpg"
+
+
+def _mark_trafficgen_cold_start():
+    global TRAFFICGEN_FIRST_LOCAL_POST
+
+    cold_start = TRAFFICGEN_FIRST_LOCAL_POST
+    TRAFFICGEN_FIRST_LOCAL_POST = False
+    return cold_start
+
+
+def _extract_trafficgen_request_id():
+    body = request.get_json(silent=True)
+    request_id = body.get("request_id") if isinstance(body, dict) else None
+    if request_id is None:
+        request_id = request.headers.get(TRAFFICGEN_REQUEST_ID_HEADER)
+    if isinstance(request_id, str) and request_id.isdigit():
+        return int(request_id)
+    return request_id
+
+
+def _wait_for_model_ready():
+    wait_timeout = int(os.environ.get("MODEL_LOAD_TIMEOUT", 6000))
+    start_wait = time.monotonic()
+
+    while MODEL_STATUS == "LOADING":
+        if time.monotonic() - start_wait > wait_timeout and wait_timeout != 0:
+            return f"Timeout ({wait_timeout}s) waiting for model to load.", 503
+        time.sleep(0.1)
+
+    if MODEL_STATUS == "FAILED":
+        return f"Model load failed: {MODEL_ERROR}", 500
+
+    return None, None
+
+
+def _load_local_frame():
+    if not os.path.exists(LOCAL_IMAGE_PATH):
+        raise FileNotFoundError(f"Bundled image missing on disk: {LOCAL_IMAGE_PATH}")
+
+    img_pil = Image.open(LOCAL_IMAGE_PATH)
+    frame = np.array(img_pil)
+
+    if len(frame.shape) == 3 and frame.shape[2] == 3:
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    elif len(frame.shape) == 3 and frame.shape[2] == 4:
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+    return frame
+
+
+@app.route("/detect/local", methods=["POST"])
+def handle_detect_local_trafficgen():
+    request_id = _extract_trafficgen_request_id()
+    cold_start = _mark_trafficgen_cold_start()
+    request_start = time.monotonic()
+
+    error, status_code = _wait_for_model_ready()
+    if error is not None:
+        return jsonify({
+            "success": False,
+            "request_id": request_id,
+            "cold_start": cold_start,
+            "error": error,
+            "processing_time_ms": round((time.monotonic() - request_start) * 1000, 2),
+        }), status_code
+
+    try:
+        frame = _load_local_frame()
+        analysis_data = detect_one_frame(frame)
+        processing_time_ms = round((time.monotonic() - request_start) * 1000, 2)
+
+        if analysis_data and analysis_data.get("success"):
+            return jsonify({
+                "success": True,
+                "request_id": request_id,
+                "cold_start": cold_start,
+                "processing_time_ms": processing_time_ms,
+                "model_inference_ms": analysis_data.get("inference_ms"),
+            }), 200
+
+        return jsonify({
+            "success": False,
+            "request_id": request_id,
+            "cold_start": cold_start,
+            "error": analysis_data.get("error", "Unknown error"),
+            "processing_time_ms": processing_time_ms,
+        }), 500
+
+    except Exception as e:
+        print(f"{Colors.FAIL}Error in trafficgen local handler: {e}{Colors.ENDC}")
+        return jsonify({
+            "success": False,
+            "request_id": request_id,
+            "cold_start": cold_start,
+            "error": str(e),
+            "processing_time_ms": round((time.monotonic() - request_start) * 1000, 2),
+        }), 500
 
 
 @app.route("/detect/local", methods=["GET"])
